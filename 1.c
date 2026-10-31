@@ -1,6 +1,6 @@
 case(P_Scan):
 		{
-			LeadData.fwscan_start_V = LeadData.speed_auto;//3;				//方位速度
+//			LeadData.fwscan_start_V = LeadData.speed_auto;//3;				//方位速度
 //			LeadData.fyscan_start_step = visible_data;
 			
 			//扫描参数初始化  只执行一次的内容
@@ -162,6 +162,7 @@ case(P_Scan):
 					
 					//坐标变换
 					ae_to_rp(LeadData.fwscan_center,LeadData.fyscan_center,User_Quat.R_fb,&User_Quat.R_give,&User_Quat.P_give);  
+					
 					LeadData.Scan_start_HG = User_Quat.R_give;
 					LeadData.Scan_start_FY = User_Quat.P_give;
 		  
@@ -244,6 +245,7 @@ case(P_Scan):
 								}
 								else
 								{
+
 									logic_lhhsb3();//自动扫描状态机
 								}
 								
@@ -251,8 +253,27 @@ case(P_Scan):
 								User_Quat.E_V_give = 0;
 								
 								//坐标转换								
-								velocity_ae_to_rp(User_Quat.R_fb,User_Quat.P_fb,User_Quat.A_V_give,User_Quat.E_V_give,&User_Quat.R_V_give,&User_Quat.P_V_give);		
+//								velocity_ae_to_rp(User_Quat.R_fb,User_Quat.P_fb,User_Quat.A_V_give,User_Quat.E_V_give,&User_Quat.R_V_give,&User_Quat.P_V_give);		
+								static float gd_lead_v_temp_scan=0;
+								static float fw_lead_v_temp_scan=0;
+								//fw_lead_v_temp = (LeadData.fwv*cos(WFWControl.P_fb/57.3)+LeadData.fyv*sin(WFWControl.P_fb/57.3))/cos(WGDControl.P_fb/57.3);
+								//gd_lead_v_temp = (-LeadData.fwv*sin(WFWControl.P_fb/57.3)+LeadData.fyv*cos(WFWControl.P_fb/57.3))/cos(WGDControl.P_fb/57.3);
 
+								// 输入：当前姿态 phi(横滚), theta(俯仰，与水平面夹角)
+								// 输入：期望地理速度 psi_dot(方位), eps_dot(俯仰)	
+								// 输出：吊舱执行器速度 roll_dot, pitch_dot
+
+								float phi_scan = (float)(User_Quat.R_fb * DEG_TO_RAD);
+								float theta_scan = (float)(User_Quat.P_fb * DEG_TO_RAD);
+								float psi_dot_scan = User_Quat.A_V_give * DEG_TO_RAD;
+								float eps_dot_scan = User_Quat.E_V_give * DEG_TO_RAD;
+								
+						
+								gimbal_kinematics_inverse(phi_scan, theta_scan,  psi_dot_scan, eps_dot_scan, &User_Quat.R_V_give,&User_Quat.P_V_give);	
+
+								User_Quat.R_V_give = User_Quat.R_V_give * RAD_TO_DEG;
+								User_Quat.P_V_give = User_Quat.P_V_give * RAD_TO_DEG;
+								
 								/**********限幅，边界处理************/
 								//横滚
 								if(fabs(User_Quat.R_fb) >= 160)	
@@ -307,13 +328,49 @@ case(P_Scan):
 //								}
 //								else if(fabs(WGDControl.P_fb) > 5+0.1)
 //								{
-									FWControl.V_give = LeadData.fwscan_V * WGDSensor.Cos_WGD;   //LeadData.fwscan_V是横滚速度
-									FWControl.A_give = fwvloop(FWControl.Kp_V,FWControl.Ki_V,FWControl.SamT,FWControl.Amax,FWSensor.Llmt,FWSensor.Rlmt,FWControl.V_give,FWControl.V_fb,FWControl.P_fb,GDangle_real,FWControl.bound_A,WFWSensor.Llmt,WFWSensor.Rlmt,WFWControl.P_fb,Axis2_or_not);
+//									FWControl.V_give = LeadData.fwscan_V * WGDSensor.Cos_WGD;   //LeadData.fwscan_V是横滚速度
+//									FWControl.A_give = fwvloop(FWControl.Kp_V,FWControl.Ki_V,FWControl.SamT,FWControl.Amax,FWSensor.Llmt,FWSensor.Rlmt,FWControl.V_give,FWControl.V_fb,FWControl.P_fb,GDangle_real,FWControl.bound_A,WFWSensor.Llmt,WFWSensor.Rlmt,WFWControl.P_fb,Axis2_or_not);
+//									FWControl.I_give = fwaloop(FWControl.Kp_A,FWControl.Ki_A,FWControl.SamT,FWControl.Kg_A,FWControl.BW_A,fabs(cos(WFWControl.P_fb)),FWControl.Imax,FWControl.A_give,FWControl.A_fb,GDangle_real,FWControl.bound_A);
+//									fw_en();
+//									WFWControl.V_give = LeadData.fwscan_V;
+//									WFWControl.I_give = wfwvloop(WFWControl.Kp_V,WFWControl.Ki_V,WFWControl.Kp_V_C,WFWControl.Ki_V_C,WFWControl.SamT,WFWControl.Imax,WFWSensor.Llmt,WFWSensor.Rlmt,WFWControl.V_give,WFWControl.V_fb,FWControl.Vmax,WFWControl.P_fb,WGDControl.P_fb,FWControl.P_fb,WGDSensor.Sec_WGD,1,5);
+//									wfw_en();		
+									
+									if(LeadData.fwscan_V>60)
+										LeadData.fwscan_V = 60;
+									else if(LeadData.fwscan_V<-60)
+										LeadData.fwscan_V = -60;
+									WFWControl.V_give = LeadData.fwscan_V;									
+//									if(((WFWControl.V_give>0)&&(WFWControl.P_fb>160))||((WFWControl.V_give<0)&&(WFWControl.P_fb<-160)))
+//									{
+//										WFWControl.I_give = 0;
+//									}
+//									else
+//									{
+//									  WFWControl.I_give = wfwiloop(WFWControl.Kp_V,WFWControl.Ki_V,FWControl.SamT,WFWControl.Imax,WFWControl.V_give,WFWControl.V_fb);
+//									}
+//									wfw_en();	
+//									FWControl.V_give = LeadData.fwscan_V * WGDSensor.Cos_WGD;
+//                                    FWControl.A_give = wfwvloop(75,2000,WFWControl.Kp_V_C,WFWControl.Ki_V_C,FWControl.SamT,FWControl.Amax,FWSensor.Llmt,FWSensor.Rlmt,FWControl.V_give,FWControl.V_fb,FWControl.Vmax,-1.0*FWControl.P_fb,WGDControl.P_fb,FWControl.P_fb,WGDSensor.Cos_WGD,1,5);	
+//									FWControl.I_give = fwaloop(FWControl.Kp_A,FWControl.Ki_A,FWControl.SamT,FWControl.Kg_A,FWControl.BW_A,fabs(cos(WFWControl.P_fb)),FWControl.Imax,FWControl.A_give,FWControl.A_fb,GDangle_real,FWControl.bound_A);
+//									fw_en();
+									
+									
+									if(((WFWControl.V_give>0)&&(WFWControl.P_fb>85))||((WFWControl.V_give<0)&&(WFWControl.P_fb<-85)))
+									{
+										WFWControl.I_give = 0;
+										WFWControl.V_give = 0;
+									}
+									else
+									{
+				//						WFWControl.I_give = -1.0*wfwiloop(WFWControl.Kp_V,WFWControl.Ki_V,FWControl.SamT,WFWControl.Imax,WFWControl.V_give,WFWControl.V_fb);
+										WFWControl.I_give = wfwiloop(0.4,7,FWControl.SamT,WFWControl.Imax,WFWControl.V_give,WFWControl.V_fb);
+									}
+									wfw_en();	
+									FWControl.V_give = WFWControl.V_give * WGDSensor.Cos_WGD;
+									FWControl.A_give = wfwvloop(75,2000,WFWControl.Kp_V_C,WFWControl.Ki_V_C,FWControl.SamT,FWControl.Amax,FWSensor.Llmt,FWSensor.Rlmt,FWControl.V_give,FWControl.V_fb,FWControl.Vmax,FWControl.P_fb,WGDControl.P_fb,FWControl.P_fb,WGDSensor.Cos_WGD,1,5);	
 									FWControl.I_give = fwaloop(FWControl.Kp_A,FWControl.Ki_A,FWControl.SamT,FWControl.Kg_A,FWControl.BW_A,fabs(cos(WFWControl.P_fb)),FWControl.Imax,FWControl.A_give,FWControl.A_fb,GDangle_real,FWControl.bound_A);
 									fw_en();
-									WFWControl.V_give = LeadData.fwscan_V;
-									WFWControl.I_give = wfwvloop(WFWControl.Kp_V,WFWControl.Ki_V,WFWControl.Kp_V_C,WFWControl.Ki_V_C,WFWControl.SamT,WFWControl.Imax,WFWSensor.Llmt,WFWSensor.Rlmt,WFWControl.V_give,WFWControl.V_fb,FWControl.Vmax,WFWControl.P_fb,WGDControl.P_fb,FWControl.P_fb,WGDSensor.Sec_WGD,1,5);
-									wfw_en();		
 //								}
 		
 						}
